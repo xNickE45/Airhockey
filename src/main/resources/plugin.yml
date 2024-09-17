@@ -1,0 +1,9 @@
+name: Airhockey
+version: '1.0-SNAPSHOT'
+main: curio.nl.airhockey.Airhockey
+api-version: '1.21'
+commands:
+  startgame:
+    description: Starts the airhockey game
+  endgame:
+    description: Ends the airhockey game
