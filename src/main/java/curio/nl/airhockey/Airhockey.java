@@ -17,6 +17,7 @@ public final class Airhockey extends JavaPlugin {
         GameArena gameArena = new GameArena(world, this);
         this.getCommand("startgame").setExecutor(new StartCommand(gameArena));
         this.getCommand("endgame").setExecutor(new EndCommand(gameArena));
+        this.getCommand("jointeam").setExecutor(new JoinTeamCommand(gameArena));
     }
 
     @Override

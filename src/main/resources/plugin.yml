@@ -7,3 +7,6 @@ commands:
     description: Starts the airhockey game
   endgame:
     description: Ends the airhockey game
+  jointeam:
+    description: Join a team
+    usage: /jointeam <red|blue>

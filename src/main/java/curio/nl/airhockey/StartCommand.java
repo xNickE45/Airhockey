@@ -16,10 +16,9 @@ public class StartCommand implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (sender instanceof Player) {
             Player player = (Player) sender;
-            System.out.println("Start command executed by player.");
             gameArena.setArenaLocation(player.getLocation());
             gameArena.createArena();
-            sender.sendMessage("Game started!");
+            gameArena.sendTeamSelectionMessage(player);
             return true;
         }
         sender.sendMessage("Only players can use this command.");
