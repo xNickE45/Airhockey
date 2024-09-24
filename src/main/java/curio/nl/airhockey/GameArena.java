@@ -13,12 +13,15 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.util.Vector;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -34,6 +37,7 @@ public class GameArena implements Listener {
     private final Map<Location, Material> originalBlocks = new HashMap<>();
     private final Map<Player, Team> playerTeams = new HashMap<>();
     private boolean gameActive = false;
+    private Puck puck;
 
     public GameArena(World world, JavaPlugin plugin) {
         this.world = world;
@@ -56,16 +60,12 @@ public class GameArena implements Listener {
             @Override
             public void run() {
                 for (double x = corner1.getX() - 1; x <= corner2.getX() + 1; x += 0.5) {
-                    for (double y = corner1.getY(); y <= corner2.getY(); y += 0.5) {
-                        world.spawnParticle(Particle.HAPPY_VILLAGER, new Location(world, x, y, corner1.getZ() - 1), 1);
-                        world.spawnParticle(Particle.HAPPY_VILLAGER, new Location(world, x, y, corner2.getZ() + 1), 1);
-                    }
+                    world.spawnParticle(Particle.HAPPY_VILLAGER, x, corner1.getY(), corner1.getZ() - 1, 1);
+                    world.spawnParticle(Particle.HAPPY_VILLAGER, x, corner1.getY(), corner2.getZ() + 1, 1);
                 }
                 for (double z = corner1.getZ() - 1; z <= corner2.getZ() + 1; z += 0.5) {
-                    for (double y = corner1.getY(); y <= corner2.getY(); y += 0.5) {
-                        world.spawnParticle(Particle.HAPPY_VILLAGER, new Location(world, corner1.getX() - 1, y, z), 1);
-                        world.spawnParticle(Particle.HAPPY_VILLAGER, new Location(world, corner2.getX() + 1, y, z), 1);
-                    }
+                    world.spawnParticle(Particle.HAPPY_VILLAGER, corner1.getX() - 1, corner1.getY(), z, 1);
+                    world.spawnParticle(Particle.HAPPY_VILLAGER, corner2.getX() + 1, corner1.getY(), z, 1);
                 }
             }
         }.runTaskTimer(plugin, 0L, 20L); // Schedule to run every second (20 ticks)
@@ -121,9 +121,7 @@ public class GameArena implements Listener {
         for (double x = corner1.getX() - 1; x <= corner2.getX() + 1; x++) {
             for (double z = corner1.getZ() - 1; z <= corner2.getZ() + 1; z++) {
                 if (x == corner1.getX() - 1 || x == corner2.getX() + 1 || z == corner1.getZ() - 1 || z == corner2.getZ() + 1) {
-                    Location borderLoc = new Location(world, x, corner1.getY() - 1, z);
-                    originalBlocks.put(borderLoc, world.getBlockAt(borderLoc).getType());
-                    world.getBlockAt(borderLoc).setType(Material.STONE);
+                    world.getBlockAt(new Location(world, x, corner1.getY() - 1, z)).setType(Material.IRON_BLOCK);
                 }
             }
         }
@@ -133,12 +131,17 @@ public class GameArena implements Listener {
         flattenField();
         displayParticles();
         createGoals();
+        spawnPuck();
         gameActive = true;
     }
 
     public void clearArena() {
         System.out.println("Clearing arena...");
         stopParticles();
+        if (puck != null) {
+            puck.removePuck();
+            puck = null;
+        }
         for (Map.Entry<Location, Material> entry : originalBlocks.entrySet()) {
             world.getBlockAt(entry.getKey()).setType(entry.getValue());
         }
@@ -162,21 +165,32 @@ public class GameArena implements Listener {
         for (double x = corner1.getX(); x <= corner2.getX(); x++) { // Clear the top of the arena
             for (double z = corner1.getZ(); z <= corner2.getZ(); z++) {
                 for (double y = corner1.getY(); y <= corner2.getY(); y++) {
-                    Location airLoc = new Location(world, x, y, z);
-                    world.getBlockAt(airLoc).setType(Material.AIR);
+                    world.getBlockAt(new Location(world, x, y, z)).setType(Material.AIR);
+                }
+            }
+        }
+        // Clear the border
+        for (double x = corner1.getX() - 1; x <= corner2.getX() + 1; x++) {
+            for (double z = corner1.getZ() - 1; z <= corner2.getZ() + 1; z++) {
+                if (x == corner1.getX() - 1 || x == corner2.getX() + 1 || z == corner1.getZ() - 1 || z == corner2.getZ() + 1) {
+                    world.getBlockAt(new Location(world, x, corner1.getY() - 1, z)).setType(Material.AIR);
                 }
             }
         }
         originalBlocks.clear();
     }
 
-    public void endGame() {
+    public void endGame(Player player) {
+        if (!gameActive) {
+            player.sendMessage(ChatColor.DARK_RED + "There is no game happening right now.");
+            return;
+        }
         clearArena();
-        for (Player player : playerTeams.keySet()) {
-            player.getInventory().setHelmet(null);
-            player.getInventory().setChestplate(null);
-            player.getInventory().setLeggings(null);
-            player.getInventory().setBoots(null);
+        for (Player p : playerTeams.keySet()) {
+            p.getInventory().setHelmet(null);
+            p.getInventory().setChestplate(null);
+            p.getInventory().setLeggings(null);
+            p.getInventory().setBoots(null);
         }
         playerTeams.clear();
         gameActive = false;
@@ -254,5 +268,15 @@ public class GameArena implements Listener {
                 player.sendMessage(ChatColor.DARK_RED + "You cannot leave the arena until the game ends.");
             }
         }
+    }
+
+
+    private void spawnPuck() {
+        Location puckSpawnLocation = new Location(world, (corner1.getX() + corner2.getX()) / 2, corner1.getY(), (corner1.getZ() + corner2.getZ()) / 2);
+        puck = new Puck(plugin, world, puckSpawnLocation, corner1, corner2);
+    }
+
+    public boolean isGameActive() {
+        return gameActive;
     }
 }

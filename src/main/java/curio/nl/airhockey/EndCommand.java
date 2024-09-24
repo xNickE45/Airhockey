@@ -15,8 +15,8 @@ public class EndCommand implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (sender instanceof Player) {
-            gameArena.endGame();
-            sender.sendMessage("The game has ended.");
+            Player player = (Player) sender;
+            gameArena.endGame(player);
             return true;
         }
         sender.sendMessage("Only players can use this command.");
