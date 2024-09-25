@@ -113,6 +113,9 @@ public class Puck implements Listener {
 
         // Rotate the puck
         rotatePuck();
+
+        // Check for goal
+        gameArena.checkGoal(newLocation);
     }
 
     private void rotatePuck() {

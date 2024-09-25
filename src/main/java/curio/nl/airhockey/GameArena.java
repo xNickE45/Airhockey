@@ -38,10 +38,17 @@ public class GameArena implements Listener {
     private final Map<Player, Team> playerTeams = new HashMap<>();
     private boolean gameActive = false;
     private Puck puck;
+    private int redTeamScore = 0;
+    private int blueTeamScore = 0;
+    private final int winningScore = 8; // Define the winning score
 
     public GameArena(World world, JavaPlugin plugin) {
         this.world = world;
         this.plugin = plugin;
+        this.corner1 = corner1;
+        this.corner2 = corner2;
+        this.goal1 = goal1;
+        this.goal2 = goal2;
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -278,6 +285,52 @@ public class GameArena implements Listener {
 
     public boolean isPlayerInTeam(Player player) {
         return playerTeams.containsKey(player);
+    }
+
+    public void checkGoal(Location puckLocation) {
+        if (isInGoal(puckLocation, goal1)) {
+            blueTeamScore++;
+            broadcastScore();
+            if (blueTeamScore >= winningScore) {
+                endGame(null);
+                broadcastMessage(ChatColor.BLUE + "Blue Team wins!");
+            } else {
+                respawnPuck();
+            }
+        } else if (isInGoal(puckLocation, goal2)) {
+            redTeamScore++;
+            broadcastScore();
+            if (redTeamScore >= winningScore) {
+                endGame(null);
+                broadcastMessage(ChatColor.RED + "Red Team wins!");
+            } else {
+                respawnPuck();
+            }
+        }
+    }
+
+    private boolean isInGoal(Location puckLocation, Location goal) {
+        // Define goal boundaries and check if puckLocation is within them
+        return puckLocation.distance(goal) < 1.5; // Example distance check
+    }
+
+    private void respawnPuck() {
+        if (puck != null) {
+            puck.removePuck();
+        }
+        spawnPuck();
+    }
+
+    private void broadcastScore() {
+        for (Player player : playerTeams.keySet()) {
+            player.sendMessage(ChatColor.RED + "Red Team: " + redTeamScore + " | " + ChatColor.BLUE + "Blue Team: " + blueTeamScore);
+        }
+    }
+
+    private void broadcastMessage(String message) {
+        for (Player player : playerTeams.keySet()) {
+            player.sendMessage(message);
+        }
     }
 
     public boolean isGameActive() {
