@@ -273,7 +273,11 @@ public class GameArena implements Listener {
 
     private void spawnPuck() {
         Location puckSpawnLocation = new Location(world, (corner1.getX() + corner2.getX()) / 2, corner1.getY(), (corner1.getZ() + corner2.getZ()) / 2);
-        puck = new Puck(plugin, world, puckSpawnLocation, corner1, corner2);
+        puck = new Puck(plugin, world, puckSpawnLocation, corner1, corner2, this);
+    }
+
+    public boolean isPlayerInTeam(Player player) {
+        return playerTeams.containsKey(player);
     }
 
     public boolean isGameActive() {

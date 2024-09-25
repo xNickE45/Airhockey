@@ -1,14 +1,13 @@
 package curio.nl.airhockey;
 
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.Particle;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -21,17 +20,19 @@ public class Puck implements Listener {
     private final Location corner1;
     private final Location corner2;
     private final JavaPlugin plugin;
+    private final GameArena gameArena;
     private ArmorStand puckEntity;
     private Vector velocity;
     private double rotationAngle;
 
-    public Puck(JavaPlugin plugin, World world, Location spawnLocation, Location corner1, Location corner2) {
+    public Puck(JavaPlugin plugin, World world, Location spawnLocation, Location corner1, Location corner2, GameArena gameArena) {
         this.plugin = plugin;
         this.world = world;
         this.corner1 = corner1;
         this.corner2 = corner2;
         this.velocity = new Vector(0, 0, 0);
         this.rotationAngle = 0;
+        this.gameArena = gameArena;
         spawnPuck(spawnLocation);
         startAutoMovement();
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
@@ -42,6 +43,7 @@ public class Puck implements Listener {
         puckEntity.setVisible(false);
         puckEntity.setGravity(false);
         puckEntity.setInvulnerable(true);
+        puckEntity.setRemoveWhenFarAway(false); // Ensure the puck is not removed when far away
 
         // Create an item stack with the custom model
         ItemStack puckItem = new ItemStack(Material.STICK); // Use a placeholder item
@@ -148,8 +150,22 @@ public class Puck implements Listener {
     @EventHandler
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
         if (event.getEntity().equals(puckEntity)) {
-            Vector hitVelocity = event.getDamager().getLocation().getDirection();
-            hitPuck(hitVelocity);
+            if (event.getDamager() instanceof Player) {
+                Player player = (Player) event.getDamager();
+                if (gameArena.isPlayerInTeam(player)) {
+                    Vector hitVelocity = player.getLocation().getDirection();
+                    hitPuck(hitVelocity);
+                } else {
+                    player.sendMessage(ChatColor.DARK_RED + "You need to be in a team to play!");
+                }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerInteractAtEntity(PlayerInteractAtEntityEvent event) {
+        if (event.getRightClicked().equals(puckEntity)) {
+            event.setCancelled(true); // Cancel the interaction to prevent item removal
         }
     }
 
