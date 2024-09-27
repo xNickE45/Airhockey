@@ -10,6 +10,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.World;
+import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -140,6 +141,7 @@ public class GameArena implements Listener {
         createGoals();
         spawnPuck();
         gameActive = true;
+        startCountdown();
     }
 
     public void clearArena() {
@@ -187,9 +189,9 @@ public class GameArena implements Listener {
         originalBlocks.clear();
     }
 
-    public void endGame(Player player) {
+    public void endGame(Team winningTeam) {
         if (!gameActive) {
-            player.sendMessage(ChatColor.DARK_RED + "There is no game happening right now.");
+            broadcastMessage(ChatColor.DARK_RED + "There is no game happening right now.");
             return;
         }
         clearArena();
@@ -198,9 +200,15 @@ public class GameArena implements Listener {
             p.getInventory().setChestplate(null);
             p.getInventory().setLeggings(null);
             p.getInventory().setBoots(null);
+            if (winningTeam !=null) {
+                ChatColor teamColor = winningTeam == Team.RED ? ChatColor.RED : ChatColor.BLUE;
+                p.sendTitle( teamColor + winningTeam.name() + " Team wins!", "", 10, 70, 20);
+            }
         }
         playerTeams.clear();
         gameActive = false;
+        redTeamScore = 0;
+        blueTeamScore = 0;
     }
 
     public void sendTeamSelectionMessage(Player player) {
@@ -230,6 +238,8 @@ public class GameArena implements Listener {
         ChatColor teamColor = team == Team.RED ? ChatColor.RED : ChatColor.BLUE;
         player.sendMessage(teamColor + "You have joined the " + teamColor + team.name() + " team!");
         equipTeamArmor(player, team);
+        player.getAttribute(Attribute.GENERIC_JUMP_STRENGTH).setBaseValue(0); // Set jump strength
+        player.setWalkSpeed(0);
     }
 
     private void equipTeamArmor(Player player, Team team) {
@@ -273,6 +283,7 @@ public class GameArena implements Listener {
                 Location teleportLocation = playerTeams.get(player) == Team.RED ? goal1.clone().add(0, 1, 0) : goal2.clone().add(0, 1, 0);
                 player.teleport(teleportLocation);
                 player.sendMessage(ChatColor.DARK_RED + "You cannot leave the arena until the game ends.");
+
             }
         }
     }
@@ -292,21 +303,54 @@ public class GameArena implements Listener {
             blueTeamScore++;
             broadcastScore();
             if (blueTeamScore >= winningScore) {
-                endGame(null);
-                broadcastMessage(ChatColor.BLUE + "Blue Team wins!");
+                endGame(Team.BLUE);
             } else {
                 respawnPuck();
+                startCountdown();
             }
         } else if (isInGoal(puckLocation, goal2)) {
             redTeamScore++;
             broadcastScore();
             if (redTeamScore >= winningScore) {
-                endGame(null);
-                broadcastMessage(ChatColor.RED + "Red Team wins!");
+                endGame(Team.RED);
             } else {
                 respawnPuck();
+                startCountdown();
             }
         }
+    }
+
+    private void startCountdown() {
+        for (Player player : playerTeams.keySet()) {
+            // Teleport players to their respective goals
+            Location teleportLocation = playerTeams.get(player) == Team.RED ? goal1.clone().add(0, 1, 0) : goal2.clone().add(0, 1, 0);
+            player.teleport(teleportLocation);
+            player.sendMessage(ChatColor.GOLD + "Get ready! The game will start soon.");
+            player.setWalkSpeed(0); // Disable movement
+            player.getAttribute(Attribute.GENERIC_JUMP_STRENGTH).setBaseValue(0); // Disable jumping
+        }
+
+        new BukkitRunnable() {
+            int countdown = 5; // 5-second countdown
+
+            @Override
+            public void run() {
+                if (countdown > 0) {
+                    for (Player player : playerTeams.keySet()) {
+                        player.sendTitle(ChatColor.RED + "Starting in", ChatColor.YELLOW + String.valueOf(countdown), 10, 20, 10);
+                    }
+                    countdown--;
+                } else {
+                    for (Player player : playerTeams.keySet()) {
+                        player.sendTitle(ChatColor.GREEN + "Go!", "", 10, 20, 10);
+                        player.setWalkSpeed(0.2f); // Enable movement
+                        player.getAttribute(Attribute.GENERIC_JUMP_STRENGTH).setBaseValue(0.42); // Enable jumping
+
+                    }
+                    this.cancel();
+                }
+            }
+        }.runTaskTimer(plugin, 0L, 20L); // Run every second (20 ticks)
     }
 
     private boolean isInGoal(Location puckLocation, Location goal) {
