@@ -10,3 +10,14 @@ commands:
   jointeam:
     description: Join a team
     usage: /jointeam <red|blue>
+
+  premissions:
+    airhockey.startgame:
+      description: Allows the player to start the airhockey game
+      default: false
+    airhockey.endgame:
+      description: Allows the player to end the airhockey game
+      default: false
+    airhockey.jointeam:
+      description: Allows the player to join a team
+      default: true
