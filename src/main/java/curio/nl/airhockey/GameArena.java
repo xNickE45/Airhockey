@@ -14,6 +14,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -23,6 +24,8 @@ import org.bukkit.util.Vector;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.bukkit.Bukkit.broadcastMessage;
 
 public class GameArena implements Listener {
     private final World world;
@@ -61,6 +64,26 @@ public class GameArena implements Listener {
         if (gameActive && playerTeams.containsKey(player)) {
             event.setCancelled(true);
             player.sendMessage(ChatColor.DARK_RED + "You cannot place blocks during the game.");
+        }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        if (playerTeams.containsKey(player)) {
+            playerTeams.remove(player);
+            player.sendMessage(ChatColor.DARK_RED + "You have left the game.");
+            checkGameStatus();
+        }
+    }
+
+    private void checkGameStatus() {
+        boolean redTeamHasPlayers = playerTeams.values().stream().anyMatch(t -> t == Team.RED);
+        boolean blueTeamHasPlayers = playerTeams.values().stream().anyMatch(t -> t == Team.BLUE);
+
+        if (!redTeamHasPlayers || !blueTeamHasPlayers) {
+            endGame(null); // End the game if one of the teams has no players
+            broadcastMessage(ChatColor.DARK_RED + "The game has ended because a team has no players.");
         }
     }
 
@@ -152,7 +175,8 @@ public class GameArena implements Listener {
         createGoals();
         spawnPuck();
         gameActive = true;
-        startCountdown();
+
+        checkAndStartCountdown();
     }
 
     public void clearArena() {
@@ -251,7 +275,21 @@ public class GameArena implements Listener {
         equipTeamArmor(player, team);
         player.getAttribute(Attribute.GENERIC_JUMP_STRENGTH).setBaseValue(0); // Set jump strength
         player.setWalkSpeed(0);
+
+        checkAndStartCountdown();
     }
+
+    private void checkAndStartCountdown() {
+        boolean redTeamHasPlayers = playerTeams.values().stream().anyMatch(t -> t == Team.RED);
+        boolean blueTeamHasPlayers = playerTeams.values().stream().anyMatch(t -> t == Team.BLUE);
+
+        if (redTeamHasPlayers && blueTeamHasPlayers) {
+            startCountdown();
+        } else {
+            broadcastMessage(ChatColor.GOLD + "Waiting for players to join both teams.");
+        }
+    }
+
 
     private void equipTeamArmor(Player player, Team team) {
         Color color = team == Team.RED ? Color.RED : Color.BLUE;
