@@ -10,6 +10,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
@@ -41,11 +43,25 @@ public class GameArena implements Listener {
     public GameArena(World world, JavaPlugin plugin) {
         this.world = world;
         this.plugin = plugin;
-        this.corner1 = corner1;
-        this.corner2 = corner2;
-        this.goal1 = goal1;
-        this.goal2 = goal2;
         Bukkit.getPluginManager().registerEvents(this, plugin);
+    }
+
+    @EventHandler
+    private void noBlockBreak(BlockBreakEvent event) {
+        Player player = event.getPlayer();
+        if (gameActive && playerTeams.containsKey(player)) {
+            event.setCancelled(true);
+            player.sendMessage(ChatColor.DARK_RED + "You cannot break blocks during the game.");
+        }
+    }
+
+    @EventHandler
+    private void noBlockPlace(BlockPlaceEvent event) {
+        Player player = event.getPlayer();
+        if (gameActive && playerTeams.containsKey(player)) {
+            event.setCancelled(true);
+            player.sendMessage(ChatColor.DARK_RED + "You cannot place blocks during the game.");
+        }
     }
 
     public void setArenaLocation(Location playerLocation) {
