@@ -1,5 +1,7 @@
 package curio.nl.airhockey;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.bukkit.*;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
@@ -8,8 +10,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
@@ -21,9 +25,13 @@ public class Puck implements Listener {
     private final Location corner2;
     private final JavaPlugin plugin;
     private final GameArena gameArena;
+    @Getter
     private ArmorStand puckEntity;
     private Vector velocity;
     private double rotationAngle;
+    @Setter
+    private ItemStack puckItem;
+
 
     public Puck(JavaPlugin plugin, World world, Location spawnLocation, Location corner1, Location corner2, GameArena gameArena) {
         this.plugin = plugin;
@@ -42,17 +50,12 @@ public class Puck implements Listener {
         puckEntity = (ArmorStand) world.spawnEntity(location, EntityType.ARMOR_STAND);
         puckEntity.setVisible(false);
         puckEntity.setGravity(false);
-        puckEntity.setInvulnerable(true);
+        puckEntity.setInvulnerable(false);
         puckEntity.setRemoveWhenFarAway(false); // Ensure the puck is not removed when far away
 
         // Create an item stack with the custom model
-        ItemStack puckItem = new ItemStack(Material.STICK); // Use a placeholder item
-        ItemMeta meta = puckItem.getItemMeta();
-        meta.setCustomModelData(1); // Set the custom model data to match your model
-        puckItem.setItemMeta(meta);
         puckEntity.setHelmet(puckItem);
 
-        puckEntity.setHelmet(puckItem);
         puckEntity.setHeadPose(puckEntity.getHeadPose().setX(0)); // Ensure the head is not rotated
         puckEntity.teleport(location); // Position the puck directly on the ground
         puckEntity.setMarker(false); // Ensure the hitbox is enabled
@@ -139,6 +142,12 @@ public class Puck implements Listener {
         }.runTaskTimer(plugin, 0L, 1L); // Run every tick for smoother movement
     }
 
+    public void teleport(Location location) {
+        if (puckEntity != null) {
+            puckEntity.teleport(location);
+        }
+    }
+
     public void removePuck() {
         if (puckEntity != null) {
             puckEntity.remove();
@@ -158,6 +167,7 @@ public class Puck implements Listener {
                 if (gameArena.isPlayerInTeam(player)) {
                     Vector hitVelocity = player.getLocation().getDirection();
                     hitPuck(hitVelocity);
+                    event.setCancelled(true); // Cancel the damage event
                 } else {
                     player.sendMessage(ChatColor.DARK_RED + "You need to be in a team to play!");
                 }
@@ -173,6 +183,7 @@ public class Puck implements Listener {
     }
 
     public void hitPuck(Vector hitVelocity) {
-        this.velocity.add(hitVelocity.multiply(1.5)); // Increase the multiplier for faster acceleration
+        this.velocity.add(hitVelocity.multiply(2.5)); // Increase the multiplier for faster acceleration
     }
 }
+

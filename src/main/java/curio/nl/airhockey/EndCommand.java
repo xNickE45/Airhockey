@@ -16,6 +16,10 @@ public class EndCommand implements CommandExecutor {
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (sender instanceof Player) {
             Player player = (Player) sender;
+            if (!player.hasPermission("airhockey.endgame")) {
+                player.sendMessage("You don't have permission to use this command.");
+                return false;
+            }
             gameArena.endGame(null);
             return true;
         }

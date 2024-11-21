@@ -10,7 +10,8 @@ commands:
   jointeam:
     description: Join a team
     usage: /jointeam <red|blue>
-
+  PuckGui:
+    description: Open the puck gui
   premissions:
     airhockey.startgame:
       description: Allows the player to start the airhockey game

@@ -12,9 +12,11 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -42,6 +44,12 @@ public class GameArena implements Listener {
     private int redTeamScore = 0;
     private int blueTeamScore = 0;
     private final int winningScore = 8; // Define the winning score
+    private BukkitTask gameTimerTask;
+    private final int gameDuration = 600; // 10 minutes
+    private final Map<Player, Location> playerOriginalLocations = new HashMap<>();
+    private boolean joinPeriodEnded = false;
+    private Location puckSpawnLocation;
+
 
     public GameArena(World world, JavaPlugin plugin) {
         this.world = world;
@@ -68,11 +76,62 @@ public class GameArena implements Listener {
     }
 
     @EventHandler
+    private void noPlayerHit(EntityDamageByEntityEvent event)
+    {
+        if (event.getDamager() instanceof Player && event.getEntity() instanceof Player && gameActive) {
+            Player player = (Player) event.getDamager();
+            if (playerTeams.containsKey(player)) {
+                event.setCancelled(true);
+                player.sendMessage(ChatColor.DARK_RED + "" + ChatColor.BOLD + "You cannot hit other players during the game.");
+            }
+        }
+    }
+
+    @EventHandler
+    private void playerLeftArena(PlayerMoveEvent event) {
+        Player player = event.getPlayer();
+        if (gameActive && playerTeams.containsKey(player)) {
+            Location to = event.getTo();
+            if (to.getX() < corner1.getX() - 1 || to.getX() > corner2.getX() + 1 ||
+                    to.getY() < corner1.getY() - 1 || to.getY() > corner2.getY() + 1 ||
+                    to.getZ() < corner1.getZ() - 1 || to.getZ() > corner2.getZ() + 1) {
+                event.setCancelled(true);
+                teleportPlayerBackToArena(player);
+            }
+        }
+    }
+    @EventHandler
+    private void onPlayerTeleport(PlayerTeleportEvent event) {
+        Player player = event.getPlayer();
+        if (gameActive && playerTeams.containsKey(player) && event.getCause() == PlayerTeleportEvent.TeleportCause.ENDER_PEARL) {
+            Location to = event.getTo();
+            if (to.getX() < corner1.getX() - 1 || to.getX() > corner2.getX() + 1 ||
+                    to.getY() < corner1.getY() - 1 || to.getY() > corner2.getY() + 1 ||
+                    to.getZ() < corner1.getZ() - 1 || to.getZ() > corner2.getZ() + 1) {
+                event.setCancelled(true);
+                teleportPlayerBackToArena(player);
+                player.sendMessage(ChatColor.DARK_RED + "" + ChatColor.BOLD + "You cannot leave the arena until the game ends.");
+            }
+        }
+    }
+
+    private void teleportPlayerBackToArena(Player player) {
+        Location to = player.getLocation();
+        if (to.getX() < corner1.getX() - 1 || to.getX() > corner2.getX() + 1 ||
+                to.getY() < corner1.getY() - 1 || to.getY() > corner2.getY() + 1 ||
+                to.getZ() < corner1.getZ() - 1 || to.getZ() > corner2.getZ() + 1) {
+            Team team = playerTeams.get(player);
+            Location teleportLocation = team == Team.RED ? goal1.clone().add(0, 1, 0) : goal2.clone().add(0, 1, 0);
+            player.teleport(teleportLocation);
+            player.sendMessage(ChatColor.DARK_RED + "" + ChatColor.BOLD + "You cannot leave the arena until the game ends.");
+        }
+    }
+    @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         if (playerTeams.containsKey(player)) {
             playerTeams.remove(player);
-            player.sendMessage(ChatColor.DARK_RED + "You have left the game.");
+            player.sendMessage(ChatColor.DARK_RED + "You have ragequited the game.");
             checkGameStatus();
         }
     }
@@ -82,19 +141,19 @@ public class GameArena implements Listener {
         boolean blueTeamHasPlayers = playerTeams.values().stream().anyMatch(t -> t == Team.BLUE);
 
         if (!redTeamHasPlayers || !blueTeamHasPlayers) {
+            broadcastMessage(ChatColor.DARK_RED + "The game has ended because a team has Ragequited.");
             endGame(null); // End the game if one of the teams has no players
-            broadcastMessage(ChatColor.DARK_RED + "The game has ended because a team has no players.");
         }
     }
 
     public void setArenaLocation(Location playerLocation) {
         double x = playerLocation.getX();
-        double y = playerLocation.getY();
+        double y = 255;
         double z = playerLocation.getZ();
         this.corner1 = new Location(world, x, y, z);
         this.corner2 = new Location(world, x + 37, y + 6, z + 37); // Adjust arena size
         this.goal1 = new Location(world, x + 18.5, y - 1, z + 2); // Adjust goal to be in the middle
-        this.goal2 = new Location(world, x + 18.5, y - 1, z + 35); // Adjust goal to be in the middle
+        this.goal2 = new Location(world, x + 18.5, y - 1, z + 35, 180,0); // Adjust goal to be in the middle
     }
 
     public void displayParticles() {
@@ -239,11 +298,22 @@ public class GameArena implements Listener {
                 ChatColor teamColor = winningTeam == Team.RED ? ChatColor.RED : ChatColor.BLUE;
                 p.sendTitle( teamColor + winningTeam.name() + " Team wins!", "", 10, 70, 20);
             }
+            p.setWalkSpeed(0.2f); // Enable movement
+            p.getAttribute(Attribute.GENERIC_JUMP_STRENGTH).setBaseValue(0.42); // Enable jumping
+            if (playerOriginalLocations.containsKey(p)) {
+                p.teleport(playerOriginalLocations.get(p));
+            }
         }
         playerTeams.clear();
         gameActive = false;
         redTeamScore = 0;
         blueTeamScore = 0;
+
+        if (gameTimerTask != null) {
+            gameTimerTask.cancel();
+            gameTimerTask = null;
+        }
+
     }
 
     public void sendTeamSelectionMessage(Player player) {
@@ -263,10 +333,15 @@ public class GameArena implements Listener {
             player.sendMessage(ChatColor.DARK_RED + "This game has already ended.");
             return;
         }
+        if (joinPeriodEnded) {
+            player.sendMessage(ChatColor.DARK_RED + "The team joining period has ended. You cannot join a team now.");
+            return;
+        }
         if (playerTeams.containsKey(player)) {
             player.sendMessage(ChatColor.DARK_RED + "You can only pick one team.");
             return;
         }
+        playerOriginalLocations.put(player, player.getLocation());
         playerTeams.put(player, team);
         Location teleportLocation = team == Team.RED ? goal1.clone().add(0, 1, 0) : goal2.clone().add(0, 1, 0);
         player.teleport(teleportLocation);
@@ -276,7 +351,11 @@ public class GameArena implements Listener {
         player.getAttribute(Attribute.GENERIC_JUMP_STRENGTH).setBaseValue(0); // Set jump strength
         player.setWalkSpeed(0);
 
-        checkAndStartCountdown();
+        playerTeamJoinsTimer();
+        teamBalance();
+
+        PuckGUI puckGUI = new PuckGUI(player, puck);
+        puckGUI.openGUI(player);
     }
 
     private void checkAndStartCountdown() {
@@ -336,11 +415,11 @@ public class GameArena implements Listener {
             }
         }
     }
-
-
     private void spawnPuck() {
-        Location puckSpawnLocation = new Location(world, (corner1.getX() + corner2.getX()) / 2, corner1.getY(), (corner1.getZ() + corner2.getZ()) / 2);
-        puck = new Puck(plugin, world, puckSpawnLocation, corner1, corner2, this);
+        puckSpawnLocation = new Location(world, (corner1.getX() + corner2.getX()) / 2, corner1.getY(), (corner1.getZ() + corner2.getZ()) / 2);
+        if (puck == null) {
+            puck = new Puck(plugin, world, puckSpawnLocation, corner1, corner2, this);
+        }
     }
 
     public boolean isPlayerInTeam(Player player) {
@@ -354,7 +433,8 @@ public class GameArena implements Listener {
             if (blueTeamScore >= winningScore) {
                 endGame(Team.BLUE);
             } else {
-                respawnPuck();
+                puck.setVelocity(new Vector(0, 0, 0)); // Stop the puck
+                puck.teleport(puckSpawnLocation);
                 startCountdown();
             }
         } else if (isInGoal(puckLocation, goal2)) {
@@ -363,7 +443,8 @@ public class GameArena implements Listener {
             if (redTeamScore >= winningScore) {
                 endGame(Team.RED);
             } else {
-                respawnPuck();
+                puck.setVelocity(new Vector(0, 0, 0)); // Stop the puck
+                puck.teleport(puckSpawnLocation);
                 startCountdown();
             }
         }
@@ -396,10 +477,20 @@ public class GameArena implements Listener {
                         player.getAttribute(Attribute.GENERIC_JUMP_STRENGTH).setBaseValue(0.42); // Enable jumping
 
                     }
+                    startGameTimer();
                     this.cancel();
                 }
             }
         }.runTaskTimer(plugin, 0L, 20L); // Run every second (20 ticks)
+    }
+    private void startGameTimer() {
+        gameTimerTask = new BukkitRunnable() {
+            @Override
+            public void run() {
+                endGame(null);
+                broadcastMessage(ChatColor.DARK_RED + "The game has ended due to time running out.");
+            }
+        }.runTaskLater(plugin, gameDuration * 20); // Convert seconds to ticks
     }
 
     private boolean isInGoal(Location puckLocation, Location goal) {
@@ -407,12 +498,6 @@ public class GameArena implements Listener {
         return puckLocation.distance(goal) < 1.5; // Example distance check
     }
 
-    private void respawnPuck() {
-        if (puck != null) {
-            puck.removePuck();
-        }
-        spawnPuck();
-    }
 
     private void broadcastScore() {
         for (Player player : playerTeams.keySet()) {
@@ -423,6 +508,65 @@ public class GameArena implements Listener {
     private void broadcastMessage(String message) {
         for (Player player : playerTeams.keySet()) {
             player.sendMessage(message);
+        }
+    }
+
+    private void teamBalance() {
+        int redTeamCount = 0;
+        int blueTeamCount = 0;
+        for (Team team : playerTeams.values()) {
+            if (team == Team.RED) {
+                redTeamCount++;
+            } else {
+                blueTeamCount++;
+            }
+        }
+
+        if (redTeamCount > blueTeamCount + 1) {
+            for (Player player : playerTeams.keySet()) {
+                if (playerTeams.get(player) == Team.RED) {
+                    playerTeams.put(player, Team.BLUE);
+                    player.sendMessage(ChatColor.BLUE + "You have been moved to the Blue team to balance the game.");
+                    Location teleportLocation = goal2.clone().add(0, 1, 0);
+                    player.teleport(teleportLocation);
+                    equipTeamArmor(player, Team.BLUE);
+                    break;
+                }
+            }
+        } else if (blueTeamCount > redTeamCount + 1) {
+            for (Player player : playerTeams.keySet()) {
+                if (playerTeams.get(player) == Team.BLUE) {
+                    playerTeams.put(player, Team.RED);
+                    player.sendMessage(ChatColor.RED + "You have been moved to the Red team to balance the game.");
+                    Location teleportLocation = goal1.clone().add(0, 1, 0);
+                    player.teleport(teleportLocation);
+                    equipTeamArmor(player, Team.RED);
+                    break;
+                }
+            }
+        }
+    }
+
+    public void playerTeamJoinsTimer() {
+        if (playerTeams.size() >= 2) {
+            new BukkitRunnable() {
+                int joinCountdown = 20; // 20 seconds for players to join
+
+                @Override
+                public void run() {
+                    if (joinCountdown > 0) {
+                        if (joinCountdown == 20 || joinCountdown == 10 || joinCountdown == 5 || joinCountdown <= 5) {
+                            broadcastMessage(ChatColor.GOLD + "Players have " + joinCountdown + " seconds to join teams.");
+                        }
+                        joinCountdown--;
+                    } else {
+                        broadcastMessage(ChatColor.RED + "Team joining period has ended. The game will start soon.");
+                        joinPeriodEnded = true;
+                        this.cancel();
+                        checkAndStartCountdown();
+                    }
+                }
+            }.runTaskTimer(plugin, 0L, 20L); // Run every second (20 ticks)
         }
     }
 
